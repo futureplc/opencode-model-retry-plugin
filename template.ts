@@ -1,15 +1,29 @@
 import { Model, Plugin, Provider } from "@opencode/plugin/effect";
 import { Effect } from "effect";
+import type { SessionHttpResponse, SessionRetry } from "@opencode/plugin/effect/session";
+import type { Scope } from "effect";
+
+function parseFallbackModel(configuredFallback: unknown): Model.Ref | undefined {
+    const fallbackName: unknown = configuredFallback === undefined ? "openai/gpt-6-luna" : configuredFallback;
+    if (typeof fallbackName !== "string" || !/^[^\s/]+\/\S+$/.test(fallbackName)) {
+        return undefined;
+    }
+    const separatorIndex: number = fallbackName.indexOf("/");
+    return {
+        providerID: Provider.ID.make(fallbackName.slice(0, separatorIndex)),
+        id: Model.ID.make(fallbackName.slice(separatorIndex + 1)),
+    };
+}
 
 export default Plugin.define({
     id: "model-fallback-with-test",
-    effect: (ctx) =>
-        Effect.gen(function* () {
+    effect: (ctx: Plugin.Context): Effect.Effect<void, never, Scope.Scope> =>
+        Effect.gen(function* (): Generator<Effect.Effect<unknown, never, Scope.Scope>, void, unknown> {
             yield* Effect.logInfo("[model-fallback-test] plugin loaded", {
                 version: ctx.app.version,
             });
 
-            yield* ctx.session.hook("http.response", (event) =>
+            yield* ctx.session.hook("http.response", (event: SessionHttpResponse): Effect.Effect<void> =>
                 event.response.status === 429
                     ? Effect.logInfo("[model-fallback-test] Caught 429 response!", {
                         status: event.response.status,
@@ -17,18 +31,19 @@ export default Plugin.define({
                     : Effect.void,
             );
 
-            const FALLBACK_MODEL = {
-                providerID: Provider.ID.make("openai"),
-                id: Model.ID.make("gpt-6-luna"),
-            };
+            const fallbackModel: Model.Ref | undefined = parseFallbackModel(ctx.options.fallbackModel);
+            if (fallbackModel === undefined) {
+                yield* Effect.logError("[model-fallback-test] Invalid options.fallbackModel: set a non-empty provider/model string without whitespace; fallback handling disabled.");
+                return;
+            }
 
-            yield* ctx.session.hook("retry", (event) =>
-                Effect.gen(function* () {
+            yield* ctx.session.hook("retry", (event: SessionRetry): Effect.Effect<void> =>
+                Effect.gen(function* (): Generator<Effect.Effect<unknown, unknown>, void, unknown> {
                     if (event.error.status !== 429) return;
 
                     const isFallback: boolean =
-                        event.model.providerID === FALLBACK_MODEL.providerID &&
-                        event.model.id === FALLBACK_MODEL.id;
+                        event.model.providerID === fallbackModel.providerID &&
+                        event.model.id === fallbackModel.id;
 
                     if (event.attempt < 3 || isFallback) {
                         if (event.decision.retry) {
@@ -40,7 +55,7 @@ export default Plugin.define({
                     event.decision = { retry: false };
                     yield* ctx.session.switchModel({
                         sessionID: event.sessionID,
-                        model: FALLBACK_MODEL,
+                        model: fallbackModel,
                     });
                     yield* ctx.session.prompt({
                         sessionID: event.sessionID,
@@ -48,7 +63,7 @@ export default Plugin.define({
                         delivery: "queue",
                     });
                 }).pipe(
-                    Effect.catch((error) =>
+                    Effect.catch((error: unknown): Effect.Effect<void> =>
                         Effect.logError("[model-fallback-test] Failed to switch to fallback model", {
                             error: String(error),
                         }),

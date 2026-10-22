@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test template.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
