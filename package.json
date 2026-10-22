@@ -1,0 +1,15 @@
+{
+  "name": "opencode-model-switch-on-failure",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.1.0",
+    "effect": "4.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
