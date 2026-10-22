@@ -30,16 +30,13 @@ export default Plugin.define({
                         event.model.providerID === FALLBACK_MODEL.providerID &&
                         event.model.id === FALLBACK_MODEL.id;
 
-                    // Keep 429 retries delayed; don't switch away from the fallback again.
-                    if (event.attempt < 2 || isFallback) {
+                    if (event.attempt < 3 || isFallback) {
                         if (event.decision.retry) {
                             event.decision = { retry: true, delay: 60_000 };
                         }
                         return;
                     }
 
-                    // After one retry on the primary model, replace its next retry with a
-                    // queued turn on the fallback model.
                     event.decision = { retry: false };
                     yield* ctx.session.switchModel({
                         sessionID: event.sessionID,
@@ -57,15 +54,6 @@ export default Plugin.define({
                         }),
                     ),
                 ),
-        );
-
-//      yield* ctx.session.hook("retry", (event) =>
-//        Effect.sync(() => {
-//        // Delay retries OpenCode already decided to make; don't force new retries.
-//          if (event.error.status === 429 && event.decision.retry) {
-//            event.decision = { retry: true, delay: 60_000 };
-//          }
-//        }),
-//      );
-    }),
+            );
+        }),
 });
