@@ -107,8 +107,8 @@ test("default global installation copies only the source supplied to the host ru
     const directory = destination(config);
     assert.equal(result.status, 0, result.stderr);
     assert.ok(existsSync(directory), "default global plugin directory must exist");
-    assert.deepEqual(readdirSync(directory), ["model-switch-on-failure.ts"]);
-    assert.deepEqual(readFileSync(join(directory, "model-switch-on-failure.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
+    assert.deepEqual(readdirSync(directory), ["index.ts"]);
+    assert.deepEqual(readFileSync(join(directory, "index.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
     assert.deepEqual(readdirSync(config), ["plugins"]);
 });
 
@@ -137,7 +137,7 @@ test("target installation resolves caller paths independently of checkout and XD
         const result = run(["--target", target], { XDG_CONFIG_HOME: "ignored-relative" });
         assert.equal(result.status, 0, result.stderr);
         const directory = destination(join(resolve(root, target), "config/opencode"));
-        assert.ok(existsSync(join(directory, "model-switch-on-failure.ts")), "target source must exist");
+        assert.ok(existsSync(join(directory, "index.ts")), "target entrypoint must exist");
     }
     assert.deepEqual(readdirSync(home), []);
 });
@@ -160,7 +160,7 @@ test("identical reruns leave all existing files untouched", (context) => {
 test("conflicting source files are preserved", (context) => {
     const { config, run } = fixture(context);
     const directory = destination(config);
-    for (const name of ["model-switch-on-failure.ts"]) {
+    for (const name of ["index.ts"]) {
         mkdirSync(directory, { recursive: true });
         const path = join(directory, name);
         writeFileSync(path, "user edits");
@@ -204,7 +204,7 @@ test("owned file symlinks are refused even for identical or missing targets", (c
 test("filesystem collisions report actionable paths without adding owned files", (context) => {
     const { config, run } = fixture(context);
     const directory = destination(config);
-    for (const name of ["model-switch-on-failure.ts", "plugin directory", "plugins parent"]) {
+    for (const name of ["index.ts", "plugin directory", "plugins parent"]) {
         const path = createCollision(config, name);
         const result = run();
         assert.notEqual(result.status, 0, name);
@@ -217,25 +217,26 @@ test("filesystem collisions report actionable paths without adding owned files",
     }
 });
 
-test("global output explains remaining setup using an object registration example", (context) => {
+test("global output explains auto-discovery and options using a directory registration example", (context) => {
     const { config, run } = fixture(context);
     mkdirSync(config, { recursive: true });
     const existing = '{"plugins":[{"package":"keep-me"}]}\n';
     writeFileSync(join(config, "opencode.json"), existing);
     const result = run();
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /files prepared.*setup remains/i);
+    assert.match(result.stdout, /installation complete.*installed source/i);
     assert.ok(result.stdout.includes(destination(config)));
     assert.doesNotMatch(result.stdout, /npm|node_modules|install --omit/);
     assert.ok(result.stdout.includes(join(config, "opencode.json")));
     const example = JSON.parse(result.stdout.match(/\{\n[\s\S]*\n\}/)?.[0] ?? "{}");
     assert.deepEqual(example, {
         $schema: "https://opencode.ai/config.json",
-        plugins: [{ package: `./plugins/${pluginName}/model-switch-on-failure.ts`, options: { fallbackModel: "openai/gpt-6-luna" } }],
+        plugins: [{ package: `./plugins/${pluginName}`, options: { fallbackModel: "openai/gpt-6-luna" } }],
     });
     assert.match(result.stdout, /append.*merge.*not replace/i);
-    assert.match(result.stdout, /register the installed source file explicitly to load this plugin and supply its options/i);
-    assert.doesNotMatch(result.stdout, /auto-discover|activation gate/i);
+    assert.match(result.stdout, /plugin directory is auto-discovered.*default options/i);
+    assert.match(result.stdout, /configuration entry.*configure.*options/i);
+    assert.doesNotMatch(result.stdout, /register the installed source file explicitly|\.ts["']/i);
     assert.match(result.stdout, /optional.*default.*openai\/gpt-6-luna/i);
     assert.equal(readFileSync(join(config, "opencode.json"), "utf8"), existing);
     assert.equal(existsSync(join(config, "opencode.jsonc")), false);
@@ -247,7 +248,7 @@ test("arbitrary global paths are printed literally without dependency commands",
     const result = run([], { XDG_CONFIG_HOME: xdg });
     assert.equal(result.status, 0, result.stderr);
     const directory = destination(join(xdg, "opencode"));
-    assert.ok(result.stdout.includes(join(directory, "model-switch-on-failure.ts")));
+    assert.ok(result.stdout.includes(join(directory, "index.ts")));
     assert.doesNotMatch(result.stdout, /npm|node_modules/);
 });
 
@@ -284,7 +285,7 @@ test("target guidance offers a discoverable root configuration alternative", (co
     assert.ok(result.stdout.includes(`Configuration example for ${join(target, "opencode.jsonc")}:`));
     const examples = [...result.stdout.matchAll(/^\{\n[\s\S]*?^\}/gm)].map(([value]) => JSON.parse(value));
     assert.deepEqual(examples.map((example) => example.plugins[0].package), [
-        `./plugins/${pluginName}/model-switch-on-failure.ts`, `./config/opencode/plugins/${pluginName}/model-switch-on-failure.ts`,
+        `./plugins/${pluginName}`, `./config/opencode/plugins/${pluginName}`,
     ]);
     for (const example of examples) {
         assert.equal(example.$schema, "https://opencode.ai/config.json");
@@ -309,7 +310,7 @@ test("legacy manifests and installed dependencies remain untouched", (context) =
     assert.equal(result.status, 0, result.stderr);
     assert.equal(readFileSync(join(directory, "package.json"), "utf8"), manifest);
     assert.equal(readFileSync(join(directory, "node_modules/keep"), "utf8"), "keep dependency");
-    assert.deepEqual(readdirSync(directory).sort(), ["model-switch-on-failure.ts", "node_modules", "package.json"]);
+    assert.deepEqual(readdirSync(directory).sort(), ["index.ts", "node_modules", "package.json"]);
 });
 
 test("fallback global installation rejects missing, empty or relative HOME before mkdir", (context) => {
@@ -327,7 +328,7 @@ test("fallback global installation rejects missing, empty or relative HOME befor
 test("comparison errors are distinguished from content conflicts", (context) => {
     const { root, config, run } = fixture(context);
     assert.equal(run().status, 0);
-    const path = join(destination(config), "model-switch-on-failure.ts");
+    const path = join(destination(config), "index.ts");
     const before = readFileSync(path);
     const PATH = utilityPath(root, { cmp: "exit 2" });
     const result = run([], { PATH });
@@ -379,7 +380,7 @@ test("valid XDG global installation does not depend on HOME", (context) => {
         const XDG_CONFIG_HOME = join(root, `xdg-${index}`);
         const result = run(["--global"], { HOME, XDG_CONFIG_HOME });
         assert.equal(result.status, 0, result.stderr);
-        assert.ok(existsSync(join(destination(join(XDG_CONFIG_HOME, "opencode")), "model-switch-on-failure.ts")));
+        assert.ok(existsSync(join(destination(join(XDG_CONFIG_HOME, "opencode")), "index.ts")));
     }
 });
 
@@ -393,7 +394,7 @@ test("target paths ignore missing or invalid global environment", (context) => {
         const target = `nested missing ${index}/project space's $literal; [*]`;
         const result = run(["--target", target], environment);
         assert.equal(result.status, 0, result.stderr);
-        assert.deepEqual(readFileSync(join(destination(join(root, target, "config/opencode")), "model-switch-on-failure.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
+        assert.deepEqual(readFileSync(join(destination(join(root, target, "config/opencode")), "index.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
     }
 });
 
@@ -402,7 +403,7 @@ test("hyphen-leading target operands are accepted with unambiguous spelling", (c
     for (const target of ["-project", "./--name"]) {
         const result = run(["--target", target]);
         assert.equal(result.status, 0, result.stderr);
-        assert.ok(existsSync(join(destination(join(root, target, "config/opencode")), "model-switch-on-failure.ts")));
+        assert.ok(existsSync(join(destination(join(root, target, "config/opencode")), "index.ts")));
     }
 });
 
@@ -413,7 +414,7 @@ test("installation uses only the allowlisted POSIX utilities without a language 
     for (let attempt = 0; attempt < 2; attempt++) {
         const result = run([], { PATH });
         assert.equal(result.status, 0, result.stderr);
-        assert.deepEqual(readFileSync(join(destination(config), "model-switch-on-failure.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
+        assert.deepEqual(readFileSync(join(destination(config), "index.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
     }
 });
 
@@ -427,7 +428,7 @@ test("source resolution is independent of CDPATH and a symlinked caller director
     symlinkSync(physical, alias);
     const result = run(["--target", "new/nested"], { CDPATH: root, PWD: alias }, { script, cwd: alias });
     assert.equal(result.status, 0, result.stderr);
-    const path = join(destination(join(physical, "new/nested/config/opencode")), "model-switch-on-failure.ts");
+    const path = join(destination(join(physical, "new/nested/config/opencode")), "index.ts");
     assert.equal(readFileSync(path, "utf8"), "a self-contained fixture source\n");
     assert.ok(result.stdout.includes(path));
 });
@@ -464,7 +465,7 @@ test("dangling plugin directory symlinks are refused before creating their targe
 test("FIFO destinations are refused without blocking", (context) => {
     const { config, run } = fixture(context);
     mkdirSync(destination(config), { recursive: true });
-    const path = join(destination(config), "model-switch-on-failure.ts");
+    const path = join(destination(config), "index.ts");
     assert.equal(spawnSync("/usr/bin/mkfifo", [path]).status, 0);
     const result = run();
     assert.equal(result.error, undefined);
@@ -482,14 +483,14 @@ test("ordinary configuration parent symlinks are allowed", (context) => {
     symlinkSync(outside, join(home, ".config"));
     const result = run();
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(readFileSync(join(destination(config), "model-switch-on-failure.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
+    assert.deepEqual(readFileSync(join(destination(config), "index.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
 });
 
 test("failed source reads report a possible partial destination without claiming success", (context) => {
     const { root, config, run } = fixture(context);
     const PATH = utilityPath(root, { cat: "printf 'partial source'; exit 74" });
     const result = run([], { PATH });
-    const path = join(destination(config), "model-switch-on-failure.ts");
+    const path = join(destination(config), "index.ts");
     assert.notEqual(result.status, 0);
     assert.ok(result.stderr.includes(path));
     assert.match(result.stderr, /cannot copy.*partial file.*inspect.*move.*rerun/i);
@@ -502,9 +503,9 @@ test("failed source reads report a possible partial destination without claiming
 
 test("a destination appearing after preflight is never overwritten", (context) => {
     const { root, config, run } = fixture(context);
-    const PATH = utilityPath(root, { mkdir: '"$REAL_MKDIR" "$@" || exit; printf preserve > "$2/model-switch-on-failure.ts"' });
+    const PATH = utilityPath(root, { mkdir: '"$REAL_MKDIR" "$@" || exit; printf preserve > "$2/index.ts"' });
     const result = run([], { PATH, REAL_MKDIR: existsSync("/bin/mkdir") ? "/bin/mkdir" : "/usr/bin/mkdir" });
-    const path = join(destination(config), "model-switch-on-failure.ts");
+    const path = join(destination(config), "index.ts");
     assert.notEqual(result.status, 0);
     assert.ok(result.stderr.includes(path));
     assert.match(result.stderr, /cannot copy.*inspect.*move.*rerun/i);

@@ -24,11 +24,11 @@ sh ./install.sh --help
 
 Target mode uses `<target>/config/opencode`, ignores both `HOME` and `XDG_CONFIG_HOME`, and resolves relative targets from your physical current directory. Missing target directories are created. The script finds its source beside itself, so it can also be invoked by absolute path from outside this checkout. A target beginning with `--` must be prefixed with `./`, for example `--target ./--name`; ordinary `-project` targets are accepted.
 
-The installer owns exactly one file under `<config>/plugins/opencode-model-switch-on-failure/`: `model-switch-on-failure.ts`, copied byte-for-byte.
+The installer owns exactly one file under `<config>/plugins/opencode-model-switch-on-failure/`: `index.ts`, copied byte-for-byte from the checkout's `model-switch-on-failure.ts` source.
 
 It does not create a manifest or copy tests, development dependencies, repository scripts or `node_modules`. Legacy `package.json`, `node_modules` and all other files are ignored and left untouched, even if changed; there is no migration cleanup. It never creates, edits or parses OpenCode JSON or JSONC configuration. Only the existing configuration filename is inspected to choose the printed example.
 
-Manual registration remains after copying the source; use the printed configuration example below. There is no dependency command to run.
+For a global installation, the plugin directory is auto-discovered and loads with default options; a configuration entry is only needed to configure or override options. Target mode prints configuration examples, but its custom configuration location is not auto-discovered. There is no dependency command to run.
 
 An identical source is left untouched on repeat runs, preserving its modification time and inode. A differing source, source-file or plugin-directory symlink (including dangling links), and nonregular-file or directory collisions are refused without overwriting. Ordinary configuration-parent symlinks are allowed. Move conflicting entries aside yourself before rerunning. Preparation is best-effort, not transactional: a read/write failure can leave a partial new source file. Inspect or move that path aside before rerunning; the installer does not blindly delete partial files. No existing source is overwritten. This is not a defence against adversarial races in parent directories.
 
@@ -41,7 +41,7 @@ The installer prints an example for `<config>/opencode.json`, or the existing `o
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "./plugins/opencode-model-switch-on-failure/model-switch-on-failure.ts",
+      "package": "./plugins/opencode-model-switch-on-failure",
       "options": {
         "fallbackModel": "openai/gpt-6-luna"
       }
@@ -50,7 +50,7 @@ The installer prints an example for `<config>/opencode.json`, or the existing `o
 }
 ```
 
-OpenCode V2 uses plural `plugins`. Relative package entries resolve from the configuration file containing the entry. OpenCode scans global plugin directories, but this installed layout has no `index.ts` or `server.ts` local-directory entrypoint. Register the installed source file explicitly to load this plugin and supply its options. See the [OpenCode V2 plugin documentation](https://opencode.ai/v2/docs/plugins).
+OpenCode V2 uses plural `plugins`. Relative package entries resolve from the configuration file containing the entry. OpenCode auto-discovers global plugin directories, and the installed `index.ts` entrypoint is loaded with default options without a configuration entry. Use the optional entry above to configure or override options. See the [OpenCode V2 plugin documentation](https://opencode.ai/v2/docs/plugins).
 
 `options.fallbackModel` must be a `provider/model` string with a non-empty provider and model and no whitespace anywhere. The first slash separates the provider from the model, so namespaced model IDs such as `organisation/model` are supported. Omit the option to retain the default `openai/gpt-6-luna`.
 
@@ -67,7 +67,7 @@ For a discoverable project-root alternative, append or merge this object entry i
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "./config/opencode/plugins/opencode-model-switch-on-failure/model-switch-on-failure.ts",
+      "package": "./config/opencode/plugins/opencode-model-switch-on-failure",
       "options": {
         "fallbackModel": "openai/gpt-6-luna"
       }
@@ -76,7 +76,7 @@ For a discoverable project-root alternative, append or merge this object entry i
 }
 ```
 
-The source remains at `<target>/config/opencode/plugins/opencode-model-switch-on-failure/model-switch-on-failure.ts`; this does not create a `.opencode` layout. Configuration merging remains manual.
+The installed entrypoint is `<target>/config/opencode/plugins/opencode-model-switch-on-failure/index.ts`; this does not create a `.opencode` layout. Configuration merging remains manual. The project-root alternative works because its configuration is discoverable and its package path resolves from that root configuration file.
 
 ### Automated tests:
 

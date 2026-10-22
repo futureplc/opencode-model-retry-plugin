@@ -103,14 +103,18 @@ EOF
 }
 
 print_setup() {
-    printf 'Files prepared; setup remains. Installed source: %s\n' "$destination"
-    printf '%s\n' 'Append or merge the following entry into existing plugins; do not replace other entries.'
-    registration_example "$(configuration_path "$config")" './plugins/opencode-model-switch-on-failure/model-switch-on-failure.ts'
+    if [ "$mode" = target ]; then
+        printf 'Files prepared; setup remains. Installed source: %s\n' "$destination"
+        printf '%s\n' 'Append or merge the following entry into existing plugins; do not replace other entries.'
+    else
+        printf 'Installation complete. Installed source: %s\n' "$destination"
+        printf '%s\n' 'The global plugin directory is auto-discovered and loads with default options. Add a configuration entry only to configure or override options.'
+        printf '%s\n' 'Optional configuration example; append or merge it into existing plugins, do not replace other entries.'
+    fi
+    registration_example "$(configuration_path "$config")" './plugins/opencode-model-switch-on-failure'
     if [ "$mode" = target ]; then
         printf '%s\n' "This custom configuration location is not auto-discovered. Alternatively, append or merge this entry into the project's root configuration:"
-        registration_example "$(configuration_path "$target")" './config/opencode/plugins/opencode-model-switch-on-failure/model-switch-on-failure.ts'
-    else
-        printf '%s\n' 'Register the installed source file explicitly to load this plugin and supply its options.'
+        registration_example "$(configuration_path "$target")" './config/opencode/plugins/opencode-model-switch-on-failure'
     fi
     printf '%s\n' 'Relative package entries resolve from the configuration file containing the entry.' 'fallbackModel is optional; the default is openai/gpt-6-luna.'
 }
@@ -126,7 +130,7 @@ source=$script_directory/model-switch-on-failure.ts
 resolve_config
 [ -f "$source" ] && [ -r "$source" ] || fail "Cannot read regular source file $source; restore it or check permissions, then rerun."
 directory=$config/plugins/opencode-model-switch-on-failure
-destination=$directory/model-switch-on-failure.ts
+destination=$directory/index.ts
 check_plugin_directory
 if ! check_destination; then
     copy_source
