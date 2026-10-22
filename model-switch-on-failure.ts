@@ -59,7 +59,7 @@ export default Plugin.define({
                         return;
                     }
 
-                    if (event.attempt >= 4 || isFallback) {
+                    if (event.attempt === 4 || isFallback) {
                         if (event.decision.retry) {
                             event.decision = { retry: true, delay: 60_000 };
                         }
