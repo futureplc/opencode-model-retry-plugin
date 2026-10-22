@@ -45,7 +45,21 @@ export default Plugin.define({
                         event.model.providerID === fallbackModel.providerID &&
                         event.model.id === fallbackModel.id;
 
-                    if (event.attempt < 3 || isFallback) {
+                    if (event.attempt === 2) {
+                        if (event.decision.retry) {
+                            event.decision = { retry: true, delay: 20_000 };
+                        }
+                        return;
+                    }
+
+                    if (event.attempt === 3) {
+                        if (event.decision.retry) {
+                            event.decision = { retry: true, delay: 40_000 };
+                        }
+                        return;
+                    }
+
+                    if (event.attempt >= 4 || isFallback) {
                         if (event.decision.retry) {
                             event.decision = { retry: true, delay: 60_000 };
                         }
