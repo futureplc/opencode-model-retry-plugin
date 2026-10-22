@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test template.test.mjs",
+    "test": "node --test model-switch-on-failure.test.mjs tests/install.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

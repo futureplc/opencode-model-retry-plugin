@@ -7,5 +7,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["template.ts"]
+  "include": ["model-switch-on-failure.ts"]
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { Effect, Logger } from "effect";
 
-import plugin from "./template.ts";
+import plugin from "./model-switch-on-failure.ts";
 
 const RESUME_PROMPT = "Resume the most recent unanswered request using the current conversation context and available tools. Avoid repeating completed work.";
 
