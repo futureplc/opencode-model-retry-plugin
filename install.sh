@@ -63,7 +63,7 @@ check_destination() {
         cmp -s "$source" "$destination"
         case $? in
             0) return 0 ;;
-            1) fail "Conflicting file preserved at $destination; move it aside before rerunning." ;;
+            1) return 2 ;;
             *) fail "Cannot inspect $source and $destination; check the paths and permissions, then rerun." ;;
         esac
     fi
@@ -74,6 +74,42 @@ copy_source() {
     mkdir -p "$directory" || fail "Cannot create $directory; check the path and permissions, then rerun."
     if ! (set -C; cat "$source" > "$destination"); then
         fail "Cannot copy source to $destination; a partial file may remain. Inspect or move it aside before rerunning."
+    fi
+}
+
+update_source() {
+    attempt=0
+    while [ "$attempt" -lt 100 ]; do
+        staging=$directory/.index.ts.tmp.$$.$attempt
+        if (umask 077; set -C; : > "$staging") 2>/dev/null; then
+            break
+        fi
+        staging=
+        attempt=$((attempt + 1))
+    done
+    [ -n "$staging" ] || fail "Cannot create a staging file in $directory; check the path and permissions, then rerun."
+
+    if ! cat "$source" > "$staging"; then
+        if rm -f "$staging"; then
+            fail "Cannot write the update for $destination; the existing file was preserved. Check the source and permissions, then rerun."
+        fi
+        fail "Cannot write the update for $destination; the existing file was preserved, but the staging file remains at $staging. Inspect and remove it before rerunning."
+    fi
+
+    current_umask=$(umask)
+    final_mode=$(printf '%o' "$((0666 & ~current_umask))")
+    if ! chmod "$final_mode" "$staging"; then
+        if rm -f "$staging"; then
+            fail "Cannot set final permissions for the update to $destination; the existing file was preserved. Check the path and permissions, then rerun."
+        fi
+        fail "Cannot set final permissions for the update to $destination; the existing file was preserved, but the staging file remains at $staging. Inspect and remove it before rerunning."
+    fi
+
+    if ! mv -f "$staging" "$destination"; then
+        if rm -f "$staging"; then
+            fail "Cannot replace $destination with the update; the existing file was preserved. Check the path and permissions, then rerun."
+        fi
+        fail "Cannot replace $destination with the update; the existing file was preserved, but the staging file remains at $staging. Inspect and remove it before rerunning."
     fi
 }
 
@@ -132,7 +168,11 @@ resolve_config
 directory=$config/plugins/opencode-model-switch-on-failure
 destination=$directory/index.ts
 check_plugin_directory
-if ! check_destination; then
-    copy_source
-fi
+check_destination
+destination_state=$?
+case $destination_state in
+    0) ;;
+    1) copy_source ;;
+    2) update_source ;;
+esac
 print_setup

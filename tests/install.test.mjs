@@ -32,7 +32,7 @@ function destination(config) {
 function utilityPath(root, overrides = {}) {
     const directory = join(root, "utilities");
     mkdirSync(directory);
-    for (const name of ["dirname", "mkdir", "cmp", "cat"]) {
+    for (const name of ["dirname", "mkdir", "cmp", "cat", "mv", "rm", "chmod"]) {
         if (overrides[name]) {
             writeFileSync(join(directory, name), `#!/bin/sh\n${overrides[name]}\n`);
             chmodSync(join(directory, name), 0o755);
@@ -157,21 +157,114 @@ test("identical reruns leave all existing files untouched", (context) => {
     }
 });
 
-test("conflicting source files are preserved", (context) => {
-    const { config, run } = fixture(context);
+test("a differing source replaces only the managed entrypoint with fresh-install permissions", (context) => {
+    const { root, config, run } = fixture(context);
+    const { script, source } = isolatedInstaller(root);
+    const initialSource = Buffer.from("initial checkout source\n");
+    const updatedSource = Buffer.from("updated checkout source\nwith more bytes\n");
+    writeFileSync(source, initialSource);
+    const initial = run([], {}, { script });
+    assert.equal(initial.status, 0, initial.stderr);
+
     const directory = destination(config);
-    for (const name of ["index.ts"]) {
-        mkdirSync(directory, { recursive: true });
-        const path = join(directory, name);
-        writeFileSync(path, "user edits");
-        const result = run();
-        assert.notEqual(result.status, 0);
-        assert.deepEqual(readdirSync(directory), [name]);
-        assert.match(result.stderr, /conflict.*preserv.*move|differ.*move/i);
-        assert.ok(result.stderr.includes(path));
-        assert.equal(readFileSync(path, "utf8"), "user edits");
-        rmSync(directory, { recursive: true });
-    }
+    const path = join(directory, "index.ts");
+    const freshMode = statSync(path).mode & 0o777;
+    writeFileSync(join(directory, "keep.txt"), "unrelated data");
+    writeFileSync(source, updatedSource);
+    const result = run([], {}, { script });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(readFileSync(path), updatedSource);
+    assert.equal(statSync(path).mode & 0o777, freshMode);
+    assert.equal(readFileSync(join(directory, "keep.txt"), "utf8"), "unrelated data");
+    assert.deepEqual(readdirSync(directory).sort(), ["index.ts", "keep.txt"]);
+});
+
+test("a failed update write preserves the installed entrypoint and removes its staging file", (context) => {
+    const { root, config, run } = fixture(context);
+    const { script, source } = isolatedInstaller(root);
+    writeFileSync(source, "installed version\n");
+    assert.equal(run([], {}, { script }).status, 0);
+    const directory = destination(config);
+    const path = join(directory, "index.ts");
+    const original = readFileSync(path);
+    writeFileSync(source, "replacement version\n");
+    const PATH = utilityPath(root, {
+        cat: 'case "$1" in *model-switch-on-failure.ts) printf partial; exit 74 ;; *) exec "$REAL_CAT" "$@" ;; esac',
+    });
+
+    const result = run([], { PATH, REAL_CAT: ["/bin/cat", "/usr/bin/cat"].find(existsSync) }, { script });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot write.*update|update.*cannot write/i);
+    assert.ok(result.stderr.includes(path));
+    assert.deepEqual(readFileSync(path), original);
+    assert.deepEqual(readdirSync(directory), ["index.ts"]);
+});
+
+test("a failed update move preserves the installed entrypoint and removes its staging file", (context) => {
+    const { root, config, run } = fixture(context);
+    const { script, source } = isolatedInstaller(root);
+    writeFileSync(source, "installed version\n");
+    assert.equal(run([], {}, { script }).status, 0);
+    const directory = destination(config);
+    const path = join(directory, "index.ts");
+    const original = readFileSync(path);
+    writeFileSync(source, "replacement version\n");
+    const PATH = utilityPath(root, { mv: "exit 73" });
+
+    const result = run([], { PATH }, { script });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot replace.*update|update.*cannot replace/i);
+    assert.ok(result.stderr.includes(path));
+    assert.deepEqual(readFileSync(path), original);
+    assert.deepEqual(readdirSync(directory), ["index.ts"]);
+});
+
+test("a failed staging permission change preserves the entrypoint and removes the private stage", (context) => {
+    const { root, config, run } = fixture(context);
+    const { script, source } = isolatedInstaller(root);
+    writeFileSync(source, "installed version\n");
+    assert.equal(run([], {}, { script }).status, 0);
+    const directory = destination(config);
+    const path = join(directory, "index.ts");
+    const original = readFileSync(path);
+    writeFileSync(source, "replacement version\n");
+    const PATH = utilityPath(root, {
+        chmod: '"$NODE_BIN" -e \'process.exit((require("node:fs").statSync(process.argv[1]).mode & 0o777) === 0o600 ? 0 : 74)\' "$2" || exit 74; exit 73',
+    });
+
+    const result = run([], { PATH, NODE_BIN: process.execPath }, { script });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /cannot set.*permission|permission.*cannot set/i);
+    assert.ok(result.stderr.includes(path));
+    assert.deepEqual(readFileSync(path), original);
+    assert.deepEqual(readdirSync(directory), ["index.ts"]);
+});
+
+test("failed staging cleanup reports the leftover path actionably", (context) => {
+    const { root, config, run } = fixture(context);
+    const { script, source } = isolatedInstaller(root);
+    writeFileSync(source, "installed version\n");
+    assert.equal(run([], {}, { script }).status, 0);
+    const directory = destination(config);
+    const original = readFileSync(join(directory, "index.ts"));
+    writeFileSync(source, "replacement version\n");
+    const PATH = utilityPath(root, {
+        cat: 'case "$1" in *model-switch-on-failure.ts) printf partial; exit 74 ;; *) exec "$REAL_CAT" "$@" ;; esac',
+        rm: "exit 73",
+    });
+
+    const result = run([], { PATH, REAL_CAT: ["/bin/cat", "/usr/bin/cat"].find(existsSync) }, { script });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /staging.*remove|remove.*staging/i);
+    assert.deepEqual(readFileSync(join(directory, "index.ts")), original);
+    const leftover = readdirSync(directory).find((name) => name !== "index.ts");
+    assert.ok(leftover, "failed cleanup should leave a reported staging path");
+    assert.ok(result.stderr.includes(join(directory, leftover)));
 });
 
 test("plugin directory symlinks are refused without touching their targets", (context) => {
@@ -410,7 +503,7 @@ test("hyphen-leading target operands are accepted with unambiguous spelling", (c
 test("installation uses only the allowlisted POSIX utilities without a language runtime", (context) => {
     const { root, config, run } = fixture(context);
     const PATH = utilityPath(root);
-    assert.deepEqual(readdirSync(PATH).sort(), ["cat", "cmp", "dirname", "mkdir"]);
+    assert.deepEqual(readdirSync(PATH).sort(), ["cat", "chmod", "cmp", "dirname", "mkdir", "mv", "rm"]);
     for (let attempt = 0; attempt < 2; attempt++) {
         const result = run([], { PATH });
         assert.equal(result.status, 0, result.stderr);
@@ -486,7 +579,7 @@ test("ordinary configuration parent symlinks are allowed", (context) => {
     assert.deepEqual(readFileSync(join(destination(config), "index.ts")), readFileSync(join(repository, "model-switch-on-failure.ts")));
 });
 
-test("failed source reads report a possible partial destination without claiming success", (context) => {
+test("failed initial source reads report partial output and a rerun repairs it", (context) => {
     const { root, config, run } = fixture(context);
     const PATH = utilityPath(root, { cat: "printf 'partial source'; exit 74" });
     const result = run([], { PATH });
@@ -497,8 +590,8 @@ test("failed source reads report a possible partial destination without claiming
     assert.doesNotMatch(result.stdout, /prepared|installed source|configuration example/i);
     assert.equal(readFileSync(path, "utf8"), "partial source");
     const rerun = run();
-    assert.notEqual(rerun.status, 0);
-    assert.equal(readFileSync(path, "utf8"), "partial source");
+    assert.equal(rerun.status, 0, rerun.stderr);
+    assert.deepEqual(readFileSync(path), readFileSync(join(repository, "model-switch-on-failure.ts")));
 });
 
 test("a destination appearing after preflight is never overwritten", (context) => {
@@ -537,4 +630,18 @@ test("installation is exposed only through the shell entrypoint rather than npm"
     assert.match(documentation, /sh \.\/install.sh --target/);
     assert.match(documentation, /sh \.\/install.sh --help/);
     assert.doesNotMatch(documentation, /scripts\/install.mjs|npm run install-plugin|npm --prefix/);
+});
+
+test("README documents safe updates without weakening unrelated-file protections", () => {
+    const documentation = readFileSync(join(repository, "README.md"), "utf8");
+    assert.match(documentation, /identical source.*untouched/i);
+    assert.match(documentation, /differing (?:checkout )?source.*updates?.*index\.ts/i);
+    assert.match(documentation, /symlink.*nonregular.*refus/i);
+    assert.match(documentation, /all other files.*left untouched/i);
+    assert.match(documentation, /appears after preflight.*not overwritten/i);
+    assert.match(documentation, /partial.*rerun.*repairs?/i);
+    assert.doesNotMatch(documentation, /partial.*inspect or move.*before rerunning/i);
+    assert.match(documentation, /update write, permission-setting, or move failures preserve the previous.*remove the staging file when possible/i);
+    assert.match(documentation, /cleanup fails.*reports its path/i);
+    assert.doesNotMatch(documentation, /differing source.*refused|no existing source is overwritten/i);
 });
