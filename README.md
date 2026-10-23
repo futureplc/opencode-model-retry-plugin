@@ -1,20 +1,16 @@
 # Opencode Model Switching on Failure plugin
 This plugin tries to fix an issue where models return a 429 and fail within a subagent when they hit a rate limit. The plugin detects a 429 and sets a longer wait between retries (to handle rate limits refreshing) then downgrades to a fallback model after a set number of tries.
 
-### Install:
+## Install:
 
-Requires a POSIX shell and standard macOS/Linux utilities. The OpenCode V2 runtime supplies `@opencode/plugin` and `effect`; end-user installation needs no Node.js, npm, dependency installation or network access.
-
-From this checkout, copy the global plugin source (the default when no flags are supplied):
+### Run the script:
+Run the install script to install the plugin to the default global opencode plugin location: ~/.config/opencode/plugins
 
 ```sh
 sh ./install.sh
-sh ./install.sh --global
 ```
 
-These are equivalent commands. Global configuration uses `$XDG_CONFIG_HOME/opencode` when `XDG_CONFIG_HOME` is non-empty and absolute. If it is empty or unset, the installer requires a non-empty, absolute `HOME` and uses `$HOME/.config/opencode`. A relative `XDG_CONFIG_HOME` is rejected; set an absolute path or unset it. There is no account-home lookup.
-
-To copy the source under a particular base directory instead:
+Or to copy the source under a particular base directory instead:
 
 ```sh
 sh ./install.sh --target /path/to/project
@@ -22,21 +18,11 @@ sh ./install.sh --target "./project with spaces"
 sh ./install.sh --help
 ```
 
-Target mode uses `<target>/config/opencode`, ignores both `HOME` and `XDG_CONFIG_HOME`, and resolves relative targets from your physical current directory. Missing target directories are created. The script finds its source beside itself, so it can also be invoked by absolute path from outside this checkout. A target beginning with `--` must be prefixed with `./`, for example `--target ./--name`; ordinary `-project` targets are accepted.
+### Register in opencode.json:
 
-The installer owns exactly one file under `<config>/plugins/opencode-model-switch-on-failure/`: `index.ts`, copied byte-for-byte from the checkout's `model-switch-on-failure.ts` source.
+As the install script states the plugin also needs to be registered in ~/.config/opencode/opencode.json:
 
-It does not create a manifest or copy tests, development dependencies, repository scripts or `node_modules`. Legacy `package.json`, `node_modules` and all other files are ignored and left untouched, even if changed; there is no migration cleanup. It never creates, edits or parses OpenCode JSON or JSONC configuration. Only the existing configuration filename is inspected to choose the printed example.
-
-For a global installation, the plugin directory is auto-discovered and loads with default options; a configuration entry is only needed to configure or override options. Target mode prints configuration examples, but its custom configuration location is not auto-discovered. There is no dependency command to run.
-
-An identical source is left untouched on repeat runs, preserving its modification time and inode. A differing checkout source updates only the installed `index.ts`; unrelated files in the plugin directory remain untouched. For an update, the installer writes a staging file in that directory and replaces `index.ts` only after the full source has been written. The replacement gets the permissions a fresh install would receive under the current `umask`; its inode and any custom mode or other metadata are not preserved. Ordinary update write, permission-setting, or move failures preserve the previous `index.ts` and remove the staging file when possible; if staging cleanup fails, the installer reports its path for inspection and removal.
-
-Symlinks at the installed entrypoint or plugin directory (including dangling links), and nonregular-file or directory collisions are refused; move those conflicting entries aside before rerunning. Ordinary configuration-parent symlinks are allowed. Initial installation uses exclusive file creation, so an entrypoint that appears after preflight is not overwritten. A failed initial install can leave a partial new `index.ts`; rerunning with a readable checkout source replaces and repairs that file without requiring manual cleanup. This is not a defence against adversarial races in parent directories.
-
-### Global configuration and options:
-
-The installer prints an example for `<config>/opencode.json`, or the existing `opencode.jsonc` if JSON is absent. Append or merge the object entry into your existing `plugins` array; do not replace your other entries or configuration.
+'fallbackModel' is optional, but the hardcoded fallback is openai/gpt-6-luna which will eventually become unavailable.
 
 ```json
 {
@@ -52,11 +38,7 @@ The installer prints an example for `<config>/opencode.json`, or the existing `o
 }
 ```
 
-OpenCode V2 uses plural `plugins`. Relative package entries resolve from the configuration file containing the entry. OpenCode auto-discovers global plugin directories, and the installed `index.ts` entrypoint is loaded with default options without a configuration entry. Use the optional entry above to configure or override options. See the [OpenCode V2 plugin documentation](https://opencode.ai/v2/docs/plugins).
-
-`options.fallbackModel` must be a `provider/model` string with a non-empty provider and model and no whitespace anywhere. The first slash separates the provider from the model, so namespaced model IDs such as `organisation/model` are supported. Omit the option to retain the default `openai/gpt-6-luna`.
-
-An invalid value, including `null`, logs one actionable configuration error and disables this plugin's fallback retry handling without failing plugin initialisation. OpenCode's native retries remain untouched, and the HTTP 429 logging hook stays active. Reload the plugin after editing its configuration or source.
+The installer owns exactly one file under `<config>/plugins/opencode-model-switch-on-failure/`: `index.ts`, copied byte-for-byte from the checkout's `model-switch-on-failure.ts` source.
 
 ### Target configuration:
 
