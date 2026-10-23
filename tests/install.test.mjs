@@ -324,7 +324,7 @@ test("global output explains auto-discovery and options using a directory regist
     const example = JSON.parse(result.stdout.match(/\{\n[\s\S]*\n\}/)?.[0] ?? "{}");
     assert.deepEqual(example, {
         $schema: "https://opencode.ai/config.json",
-        plugins: [{ package: `./plugins/${pluginName}`, options: { fallbackModel: "openai/gpt-6-luna" } }],
+        plugins: [{ package: `./plugins/${pluginName}`, options: { fallbackModel: "openai/gpt-6-luna", retries: 5 } }],
     });
     assert.match(result.stdout, /append.*merge.*not replace/i);
     assert.match(result.stdout, /plugin directory is auto-discovered.*default options/i);
@@ -382,7 +382,7 @@ test("target guidance offers a discoverable root configuration alternative", (co
     ]);
     for (const example of examples) {
         assert.equal(example.$schema, "https://opencode.ai/config.json");
-        assert.deepEqual(example.plugins[0].options, { fallbackModel: "openai/gpt-6-luna" });
+        assert.deepEqual(example.plugins[0].options, { fallbackModel: "openai/gpt-6-luna", retries: 5 });
     }
     assert.match(result.stdout, /relative.*configuration.*contain/i);
     assert.doesNotMatch(result.stdout, /OPENCODE_CONFIG/);
@@ -630,6 +630,18 @@ test("installation is exposed only through the shell entrypoint rather than npm"
     assert.match(documentation, /sh \.\/install.sh --target/);
     assert.match(documentation, /sh \.\/install.sh --help/);
     assert.doesNotMatch(documentation, /scripts\/install.mjs|npm run install-plugin|npm --prefix/);
+});
+
+test("README documents retries in global and discoverable project configuration", () => {
+    const documentation = readFileSync(join(repository, "README.md"), "utf8");
+    const globalExample = documentation.match(/### Register in opencode\.json:[\s\S]*?```json\n([\s\S]*?)\n```/)?.[1];
+    const projectExample = documentation.match(/### Target configuration:[\s\S]*?For a discoverable project-root alternative,[\s\S]*?```json\n([\s\S]*?)\n```/)?.[1];
+
+    assert.ok(globalExample, "global configuration JSON example exists");
+    assert.ok(projectExample, "discoverable project-root JSON example exists");
+    assert.equal(JSON.parse(globalExample).plugins[0].options.retries, 5);
+    assert.equal(JSON.parse(projectExample).plugins[0].options.retries, 5);
+    assert.match(documentation, /`retries` option defaults to `5` and controls the retry threshold at which the plugin switches to the fallback model after HTTP 429 responses/i);
 });
 
 test("README documents safe updates without weakening unrelated-file protections", () => {

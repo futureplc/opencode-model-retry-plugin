@@ -130,7 +130,8 @@ registration_example() {
     {
       "package": "$2",
       "options": {
-        "fallbackModel": "openai/gpt-6-luna"
+        "fallbackModel": "openai/gpt-6-luna",
+        "retries": 5
       }
     }
   ]

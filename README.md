@@ -4,25 +4,26 @@ This plugin tries to fix an issue where models return a 429 and fail within a su
 ## Install:
 
 ### Run the script:
-Run the install script to install the plugin to the default global opencode plugin location: ~/.config/opencode/plugins
+Run the install script to install the plugin to the default global OpenCode plugin location: `~/.config/opencode/plugins`. The default is global; `--global` selects the same location explicitly.
 
 ```sh
 sh ./install.sh
+sh ./install.sh --global
+sh ./install.sh --target /path/to/project
+sh ./install.sh --help
 ```
 
-Or to copy the source under a particular base directory instead:
+To copy the source under a particular base directory instead, use `--target` (paths with spaces are supported):
 
 ```sh
-sh ./install.sh --target /path/to/project
 sh ./install.sh --target "./project with spaces"
-sh ./install.sh --help
 ```
 
 ### Register in opencode.json:
 
 As the install script states the plugin also needs to be registered in ~/.config/opencode/opencode.json:
 
-'fallbackModel' is optional, but the hardcoded fallback is openai/gpt-6-luna which will eventually become unavailable.
+'fallbackModel' is optional, but the hardcoded fallback is `openai/gpt-6-luna`, which may eventually become unavailable. The `retries` option defaults to `5` and controls the retry threshold at which the plugin switches to the fallback model after HTTP 429 responses.
 
 ```json
 {
@@ -31,7 +32,8 @@ As the install script states the plugin also needs to be registered in ~/.config
     {
       "package": "./plugins/opencode-model-switch-on-failure",
       "options": {
-        "fallbackModel": "openai/gpt-6-luna"
+        "fallbackModel": "openai/gpt-6-luna",
+        "retries": 5
       }
     }
   ]
@@ -40,9 +42,13 @@ As the install script states the plugin also needs to be registered in ~/.config
 
 The installer owns exactly one file under `<config>/plugins/opencode-model-switch-on-failure/`: `index.ts`, copied byte-for-byte from the checkout's `model-switch-on-failure.ts` source.
 
+### Safe updates:
+
+An identical source leaves the managed file untouched. A differing checkout source updates only `index.ts`; all other files are left untouched. Managed symlinks and nonregular entries are refused. If a destination appears after preflight, it is not overwritten. After a partial initial write, rerunning the installer repairs it. Update write, permission-setting, or move failures preserve the previous `index.ts` and remove the staging file when possible; if cleanup fails, the installer reports its path.
+
 ### Target configuration:
 
-`<target>/config/opencode/opencode.json` (or `.jsonc`) is a custom location and is not auto-discovered by OpenCode. The installer prints the same configuration example for that location, but preparing those files alone does not make OpenCode load them.
+`<target>/config/opencode/opencode.json` (or `.jsonc`) is a custom location and is not auto-discovered by OpenCode. The installer prints the same plugin options example (`fallbackModel` and `retries`) for that location, but preparing those files alone does not make OpenCode load them.
 
 For a discoverable project-root alternative, append or merge this object entry into `<target>/opencode.json`, or the existing `<target>/opencode.jsonc` when JSON is absent:
 
@@ -53,7 +59,8 @@ For a discoverable project-root alternative, append or merge this object entry i
     {
       "package": "./config/opencode/plugins/opencode-model-switch-on-failure",
       "options": {
-        "fallbackModel": "openai/gpt-6-luna"
+        "fallbackModel": "openai/gpt-6-luna",
+        "retries": 5
       }
     }
   ]

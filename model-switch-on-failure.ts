@@ -24,23 +24,13 @@ function retryThenFallback(
         event.model.providerID === fallbackModel.providerID &&
         event.model.id === fallbackModel.id;
 
-    if (event.attempt === 2) {
-        if (event.decision.retry) {
-            event.decision = { retry: true, delay: 20_000 };
-        }
-        return Effect.void;
-    }
+    const retries: number = typeof ctx.options.retries === "number" ? ctx.options.retries : 5;
 
-    if (event.attempt === 3) {
-        if (event.decision.retry) {
-            event.decision = { retry: true, delay: 40_000 };
-        }
-        return Effect.void;
-    }
+    if (event.attempt <= retries +1 || isFallback) {
+        const delay: number = Math.min(event.attempt * 10_000, 60_000);
 
-    if (event.attempt === 4 || isFallback) {
         if (event.decision.retry) {
-            event.decision = { retry: true, delay: 60_000 };
+            event.decision = { retry: true, delay: delay };
         }
         return Effect.void;
     }
