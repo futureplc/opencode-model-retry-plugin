@@ -23,7 +23,7 @@ sh ./install.sh --target "./project with spaces"
 
 As the install script states the plugin also needs to be registered in ~/.config/opencode/opencode.json:
 
-'fallbackModel' is optional, but the hardcoded fallback is `openai/gpt-6-luna`, which may eventually become unavailable. The `retries` option defaults to `5` and controls the retry threshold at which the plugin switches to the fallback model after HTTP 429 responses.
+'fallbackModel' is optional, but the hardcoded fallback is `openai/gpt-6-luna`, which may eventually become unavailable. The `maxRetries` option defaults to `100` and controls the retry threshold at which the plugin exits a subagent back to primary session on HTTP 429 responses. The `retriesBeforeFallback` defaults to `101` and is how many retries before it will switch model.
 
 ```json
 {
@@ -33,7 +33,8 @@ As the install script states the plugin also needs to be registered in ~/.config
       "package": "./plugins/opencode-model-switch-on-failure",
       "options": {
         "fallbackModel": "openai/gpt-6-luna",
-        "retries": 5
+        "maxRetries": 10,
+        "retriesBeforeFallabck": 5
       }
     }
   ]
@@ -60,7 +61,8 @@ For a discoverable project-root alternative, append or merge this object entry i
       "package": "./config/opencode/plugins/opencode-model-switch-on-failure",
       "options": {
         "fallbackModel": "openai/gpt-6-luna",
-        "retries": 5
+        "maxRetries": 10,
+        "retriesBeforeFallabck": 5
       }
     }
   ]
